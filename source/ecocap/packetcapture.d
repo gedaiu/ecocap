@@ -1,6 +1,5 @@
 module ecocap.packetcapture;
 
-
 import std.datetime;
 import std.exception;
 import std.string;
@@ -19,12 +18,16 @@ auto IP_HL(T)(T ip) {
 	return (((ip).ip_vhl) & 0x0f);
 }
 
+auto TH_OFF(T)(T th) {
+	return (((th).th_offx2 & 0xf0) >> 4);
+}
+
 
 extern(C) {
 	struct ether_header {
-		ubyte[6]	ether_dhost;
-		ubyte[6]	ether_shost;
-		ushort	ether_type;
+		ubyte[6] ether_dhost;
+		ubyte[6] ether_shost;
+		ushort ether_type;
 	}
 
 	struct sniff_ip {
@@ -36,15 +39,29 @@ extern(C) {
 		ubyte ip_ttl;		/* time to live */
 		ubyte ip_p;		/* protocol */
 		ushort ip_sum;		/* checksum */
+
 		in_addr ip_src;
 		in_addr ip_dst; /* source and dest address */
 	}
 
+	struct sniff_tcp {
+		ushort th_sport;               /* source port */
+		ushort th_dport;               /* destination port */
+		uint th_seq;                 /* sequence number */
+		uint th_ack;                 /* acknowledgement number */
+		char  th_offx2;               /* data offset, rsvd */
+		char  th_flags;
+		ushort th_win;                 /* window */
+		ushort th_sum;                 /* checksum */
+		ushort th_urp;                 /* urgent pointer */
+	};
+
 	struct in_addr {
-		ulong s_addr;  // load with inet_aton()
+		uint s_addr;  // load with inet_aton()
 	}
 
 	char* inet_ntoa(in_addr);
+	ushort ntohs(ushort);
 }
 
 enum IpProtocol {
@@ -78,14 +95,75 @@ enum IpProtocol {
 struct Packet {
 	SysTime date;
 	IpProtocol protocol;
-	string from;
-	string to;
+
+	string sourceIp;
+	long sourcePort;
+
+	string destinationIp;
+	long destinationPort;
+
 	ulong size;
 }
 
 extern(C) void got_packet(ubyte* args, const (pcap_pkthdr*) header, const (ubyte*) packet)
 {
-  writeln("got_packet");
+	ether_header *ethernet;  /* The ethernet header [1] */
+	sniff_ip *ip;              /* The IP header */
+	sniff_tcp *tcp;            /* The TCP header */
+	char *payload;                    /* Packet payload */
+
+	ulong size_ip;
+	ulong size_tcp;
+	ulong size_payload;
+
+	ethernet = cast(ether_header*)(packet);
+	ip = cast(sniff_ip*)(packet + SIZE_ETHERNET);
+	size_ip = IP_HL(ip)*4;
+
+	if (size_ip < 20) {
+		debug writeln("   * Invalid IP header length: ", size_ip, " bytes");
+		return;
+	}
+
+	string sourceIp = inet_ntoa(ip.ip_src).fromStringz.to!string;
+	string destinationIp = inet_ntoa(ip.ip_dst).fromStringz.to!string;
+
+	if(ip.ip_p != IpProtocol.IPPROTO_TCP) {
+		return;
+	}
+
+	//writeln("from:", from);
+	//writeln("to:", to);
+
+	tcp = cast(sniff_tcp*)(packet + SIZE_ETHERNET + size_ip);
+	size_tcp = TH_OFF(tcp)*4;
+
+	if (size_tcp < 20) {
+		writeln("   * Invalid TCP header length:", size_tcp, "bytes");
+		return;
+	}
+
+
+	auto sourcePort = ntohs(tcp.th_sport);
+	auto destinationPort = ntohs(tcp.th_dport);
+
+	//payload = cast(char *)(packet + SIZE_ETHERNET + size_ip + size_tcp);
+	size_payload = ntohs(ip.ip_len) - (size_ip + size_tcp);
+
+	//writeln("   Payload: ", size_payload , "bytes");
+
+	if(size_payload > 0) {
+		//writeln(payload.fromStringz.to!string);
+	}
+
+
+	auto date = SysTime.fromUnixTime(header.ts.tv_sec);
+	auto owner = cast(PacketCapture) args;
+	auto packetData = immutable Packet(date, ip.ip_p.to!IpProtocol, sourceIp, sourcePort, destinationIp, destinationPort, size_payload);
+	owner.gotPacket(packetData);
+
+
+/+
 	auto owner = cast(PacketCapture) args;
 	auto ethernet = cast(ether_header*)(packet);
 
@@ -100,12 +178,15 @@ extern(C) void got_packet(ubyte* args, const (pcap_pkthdr*) header, const (ubyte
 	string from = inet_ntoa(ip.ip_src).fromStringz.to!string;
 	string to = inet_ntoa(ip.ip_dst).fromStringz.to!string;
 
+	writeln(from, "=>", to);
+
 	auto packetData = immutable Packet(date, ip.ip_p.to!IpProtocol, from, to, len);
-	owner.gotPacket(packetData);
+	owner.gotPacket(packetData);+/
 }
 
 class PacketCapture : Thread {
-	private {
+	alias PacketHandler = void delegate(immutable(Packet)) @system;
+	private __gshared {
 		char* errorBuf;
 		char* device;
 
@@ -114,6 +195,8 @@ class PacketCapture : Thread {
 		bpf_program fp;
 		pcap_pkthdr hdr;
 		pcap_t *pcapHandler;
+
+		PacketHandler callback;
 	}
 
 	this() {
@@ -171,17 +254,17 @@ class PacketCapture : Thread {
 	}
 
 	void run() {
-		auto num_packets = 10;
+		auto num_packets = -10;
 		pcap_loop(pcapHandler, num_packets, &got_packet, cast(ubyte*)this);
 	}
 
 	void gotPacket(immutable Packet packet) {
+		if(callback !is null) {
+			callback(packet);
+		}
+	}
 
-		/* print source and destination IP addresses */
-		writeln("[" , packet.date , "] #",
-			packet.protocol ," ",
-			packet.from , " -> ",
-			packet.to, " ",
-			packet.size / 1024 , "kb");
+	void handler(T)(T packetHandler) {
+		this.callback = packetHandler;
 	}
 }

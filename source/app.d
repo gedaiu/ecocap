@@ -1,6 +1,6 @@
 import std.stdio;
 
-
+import ecocap.classifier;
 import ecocap.packetcapture;
 import ecocap.domains;
 
@@ -23,11 +23,26 @@ shared static this()
 
 int main()
 {
+	TrafficClassifier classifier = new TrafficClassifier();
 	PacketCapture capture = new PacketCapture();
 
 	capture.open();
 	capture.setFilter("ip");
 	capture.start();
+
+
+	void packetHandler(immutable Packet packet) {
+		if(packet.protocol != IpProtocol.IPPROTO_TCP) {
+			return;
+		}
+
+		classifier.add(packet);
+
+		writeln("total upload: ", classifier.upload);
+		writeln("total download: ", classifier.download);
+	}
+
+	capture.handler(&packetHandler);
 
 	scope(exit) {
 		capture.close();
