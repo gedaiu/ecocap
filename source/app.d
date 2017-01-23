@@ -38,8 +38,10 @@ int main()
 
 		classifier.add(packet);
 
-		writeln("total upload: ", classifier.upload);
-		writeln("total download: ", classifier.download);
+		writeln("hosts: ", classifier.hosts.serializeToJson.toPrettyString);
+		writeln("remote: ", classifier.remotesData.serializeToJson.toPrettyString);
+		writeln("total: ", classifier.data.serializeToJson.toPrettyString);
+		writeln("timeline: ", classifier.downloadTimeline.get);
 	}
 
 	capture.handler(&packetHandler);

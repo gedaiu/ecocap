@@ -150,38 +150,10 @@ extern(C) void got_packet(ubyte* args, const (pcap_pkthdr*) header, const (ubyte
 	//payload = cast(char *)(packet + SIZE_ETHERNET + size_ip + size_tcp);
 	size_payload = ntohs(ip.ip_len) - (size_ip + size_tcp);
 
-	//writeln("   Payload: ", size_payload , "bytes");
-
-	if(size_payload > 0) {
-		//writeln(payload.fromStringz.to!string);
-	}
-
-
 	auto date = SysTime.fromUnixTime(header.ts.tv_sec);
 	auto owner = cast(PacketCapture) args;
 	auto packetData = immutable Packet(date, ip.ip_p.to!IpProtocol, sourceIp, sourcePort, destinationIp, destinationPort, size_payload);
 	owner.gotPacket(packetData);
-
-
-/+
-	auto owner = cast(PacketCapture) args;
-	auto ethernet = cast(ether_header*)(packet);
-
-	ulong len = header.caplen;
-	auto date = SysTime.fromUnixTime(header.ts.tv_sec);
-
-	/* define/compute ip header offset */
-	auto ip = cast(sniff_ip*)(packet + SIZE_ETHERNET);
-	auto size_ip = IP_HL(ip)*4;
-	enforce(size_ip >= 20, "Invalid IP header length: " ~ size_ip.to!string ~" bytes");
-
-	string from = inet_ntoa(ip.ip_src).fromStringz.to!string;
-	string to = inet_ntoa(ip.ip_dst).fromStringz.to!string;
-
-	writeln(from, "=>", to);
-
-	auto packetData = immutable Packet(date, ip.ip_p.to!IpProtocol, from, to, len);
-	owner.gotPacket(packetData);+/
 }
 
 class PacketCapture : Thread {

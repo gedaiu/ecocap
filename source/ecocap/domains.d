@@ -28,7 +28,7 @@ string[] getHostNames(string ip) {
 
 string[] nslookup(string ip) {
 	string[] list;
-	auto pipes = pipeProcess(["nslookup", ip ], Redirect.stdout);
+	auto pipes = pipeProcess(["nslookup", ip], Redirect.stdout);
 
 	if (wait(pipes.pid) != 0) {
 		writeln("lookup failed!");
