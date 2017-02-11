@@ -115,6 +115,7 @@ extern(C) void got_packet(ubyte* args, const (pcap_pkthdr*) header, const (ubyte
 	ulong size_ip;
 	ulong size_tcp;
 	ulong size_payload;
+	auto owner = cast(PacketCapture) args;
 
 	ethernet = cast(ether_header*)(packet);
 	ip = cast(sniff_ip*)(packet + SIZE_ETHERNET);
@@ -127,13 +128,13 @@ extern(C) void got_packet(ubyte* args, const (pcap_pkthdr*) header, const (ubyte
 
 	string sourceIp = inet_ntoa(ip.ip_src).fromStringz.to!string;
 	string destinationIp = inet_ntoa(ip.ip_dst).fromStringz.to!string;
+	auto date = SysTime.fromUnixTime(header.ts.tv_sec);
 
 	if(ip.ip_p != IpProtocol.IPPROTO_TCP) {
+		auto packetData = immutable Packet(date, ip.ip_p.to!IpProtocol, sourceIp, 0, destinationIp, 0, size_ip);
+		owner.gotPacket(packetData);
 		return;
 	}
-
-	//writeln("from:", from);
-	//writeln("to:", to);
 
 	tcp = cast(sniff_tcp*)(packet + SIZE_ETHERNET + size_ip);
 	size_tcp = TH_OFF(tcp)*4;
@@ -143,15 +144,11 @@ extern(C) void got_packet(ubyte* args, const (pcap_pkthdr*) header, const (ubyte
 		return;
 	}
 
-
 	auto sourcePort = ntohs(tcp.th_sport);
 	auto destinationPort = ntohs(tcp.th_dport);
 
-	//payload = cast(char *)(packet + SIZE_ETHERNET + size_ip + size_tcp);
 	size_payload = ntohs(ip.ip_len) - (size_ip + size_tcp);
 
-	auto date = SysTime.fromUnixTime(header.ts.tv_sec);
-	auto owner = cast(PacketCapture) args;
 	auto packetData = immutable Packet(date, ip.ip_p.to!IpProtocol, sourceIp, sourcePort, destinationIp, destinationPort, size_payload);
 	owner.gotPacket(packetData);
 }

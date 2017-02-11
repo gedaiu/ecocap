@@ -13,5 +13,6 @@
 	"libs": ["pcap"],
 	"description": "A minimal D application.",
 	"copyright": "Copyright © 2016, Szabo Bogdan",
-	"license": "proprietary"
+	"license": "proprietary",
+	"dflags": ["-Jpublic"]
 }

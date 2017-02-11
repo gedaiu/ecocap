@@ -153,7 +153,6 @@ unittest {
 	assert(timeline.values[1] == 7);
 }
 
-
 class TrafficClassifier {
 	TrafficData[string] data;
 	TrafficData[string][string] remotesData;
@@ -169,7 +168,7 @@ class TrafficClassifier {
 	void add(immutable Packet packet) {
 		string key = (cast(Date) packet.date).toISOExtString();
 		string remote = packet.isUpload ? packet.destinationIp : packet.sourceIp;
-		hosts[remote] = remote.getHostNames;
+		//hosts[remote] = remote.getHostNames;
 
 		if(key !in data) {
 			data[key] = TrafficData();
